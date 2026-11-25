@@ -2,7 +2,7 @@
 #define PORT_KOREAN_H
 
 /*
- * Korean fan-translation support ("Fushigi no Boushi (K) ver1.0", built on the
+ * Korean fan-translation support ("Fushigi no Boushi (K)" ver1.0/1.1, built on the
  * JP BZMJ ROM).
  *
  * The translation patch replaces ARM code in the ROM (glyph-bank lookup,

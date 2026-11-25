@@ -1,3 +1,16 @@
+> [!NOTE]
+> **한글패치 롬 지원 포크 (Korean translation patch fork)**
+>
+> 이 저장소는 [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds)의 비공식 포크로,
+> 일본판 기반 한글패치 롬 「The Legend of Zelda - Fushigi no Boushi(K)」 **ver1.0 / ver1.1**을 실행할 수 있습니다.
+>
+> - 다운로드: [Releases](https://github.com/donn-cow/zelda-tmc-3ds/releases)
+> - 사용법·동작 원리: [docs/KOREAN_PATCH.md](docs/KOREAN_PATCH.md)
+> - 롬과 패치 데이터는 포함되어 있지 않습니다. 직접 준비한 한글패치 롬이 필요합니다.
+> - 이 빌드는 온라인 업데이터가 꺼져 있습니다. 한글패치 관련 문제는 원본 저장소가 아닌 [이 포크의 Issues](https://github.com/donn-cow/zelda-tmc-3ds/issues)에 남겨주세요.
+>
+> 아래는 원본 README입니다.
+
 <h1 align="center">The Minish Cap 3DS</h1>
 
 <p align="center">

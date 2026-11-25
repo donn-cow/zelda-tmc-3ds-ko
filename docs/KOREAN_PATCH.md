@@ -1,8 +1,14 @@
 # 한글패치 롬 지원 (Korean translation patch)
 
-이 빌드는 일본판(BZMJ) 기반 한글패치 롬
-`The Legend of Zelda - Fushigi no Boushi(K)_ver1.0.gba`
-(SHA-1 `c15e3905cf64b6a1fdfe9118346e1ff5dcfa8ee8`)을 그대로 읽어서 실행합니다.
+이 빌드는 일본판(BZMJ) 기반 한글패치 롬을 그대로 읽어서 실행합니다.
+구동이 확인된 버전은 다음과 같습니다.
+
+| 롬 파일 | SHA-1 |
+|---|---|
+| `The Legend of Zelda - Fushigi no Boushi(K)_ver1.0.gba` | `c15e3905cf64b6a1fdfe9118346e1ff5dcfa8ee8` |
+| `The Legend of Zelda - Fushigi no Boushi(K)_ver1.1.gba` | `5dd6bdbce68a47bd8dc0599385b85116f6fc9b4b` |
+
+롬 판별은 파일 해시가 아니라 롬 안의 한글 글리프 뱅크 구조로 하므로, 같은 구조를 쓰는 패치 버전이면 동작합니다.
 
 ## 사용법
 
@@ -38,6 +44,6 @@ Project Picori 업스트림 값과 롬 탐색(음악 테이블 `0x9F3D3C`)으로
 
 ## 알려진 한계
 
-* 실기/에뮬레이터 테스트 전입니다. 이상이 있으면 `L + R + A` 덤프를 남겨주세요.
+* ver1.0과 ver1.1에서 구동을 확인했습니다. 이상이 있으면 `L + R + A` 덤프를 남겨주세요.
 * 일본판 경로는 업스트림에서도 USA/EU보다 테스트가 적습니다.
 * 하단 화면(지도/설정)의 포트 전용 UI 글자는 영어로 나옵니다.
