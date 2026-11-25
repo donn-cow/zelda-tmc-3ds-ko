@@ -7,6 +7,7 @@
  * rom_data/ so the game can run without the full ROM after first boot.
  */
 
+#include "port_korean.h"
 #include <stddef.h>
 
 #include "port_rom.h"
@@ -616,21 +617,21 @@ const RomOffsets kRomOffsets_JP = {
     .paletteGroups = 0xFF500,
     .objPalettes = 0x132F94,
     .frameObjLists = 0x2F39A0,
-    .extraFrameOffsets = 0,
+    .extraFrameOffsets = 0x9DD6F0,
     .fixedTypeGfx = 0x13275C,
     .spritePtrs = 0x29B4,
-    .collisionMatrix = 0,
-    .collisionShapePtrs = 0,
-    .tileTypeProperties = 0,
-    .figurines = 0,
-    .fuserEnemyData = 0,
-    .fuserNpcData = 0,
-    .fusionTextPtrs = 0,
-    .fuserFusionPtrs = 0,
-    .lakeHyliaEnemies = 0,
-    .lakeHyliaCleared = 0,
-    .lilypadRails = 0,
-    .songTable = 0,
+    .collisionMatrix = 0x0B7914,
+    .collisionShapePtrs = 0x00823C,
+    .tileTypeProperties = 0x000360,
+    .figurines = 0x127E6C,
+    .fuserEnemyData = 0x00232E,
+    .fuserNpcData = 0x002342,
+    .fusionTextPtrs = 0x001A7C,
+    .fuserFusionPtrs = 0x001DCC,
+    .lakeHyliaEnemies = 0x0F3A5C,
+    .lakeHyliaCleared = 0x0F3BBC,
+    .lilypadRails = 0x0FEA48,
+    .songTable = 0x9F3D3C,
     .translations = 0x108ED8,
     .text09230 = 0x108EF4,
     .text09244 = 0x108F08,
@@ -654,15 +655,15 @@ const RomOffsets kRomOffsets_JP = {
     .bgAnimTable = 0xB72FC,
     .localFlagBanks = 0x11E118,
     .townspersonSpriteLoadPtrs = 0x10B3B0,
-    .guardPatrolData = 0,
-    .innWestEntities = 0,
-    .innMiddleEntities = 0,
-    .innEastEntities = 0,
-    .simonEntityLists = 0,
-    .simonEnemyPatterns = 0,
-    .simonChestPatterns = 0,
-    .gustJarAnimTable = 0,
-    .gustJarHitbox = 0,
+    .guardPatrolData = 0x10F380,
+    .innWestEntities = 0x0D6814,
+    .innMiddleEntities = 0x0D68B8,
+    .innEastEntities = 0x0D6958,
+    .simonEntityLists = 0x0F09E0,
+    .simonEnemyPatterns = 0x0F0A80,
+    .simonChestPatterns = 0x0F0B30,
+    .gustJarAnimTable = 0x132340,
+    .gustJarHitbox = 0x132754,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 208,
     .objPalettesCount = 360,
@@ -1560,6 +1561,7 @@ void Port_LoadRom(const char* path) {
 
     /* ---- Step 3: auto-detect ROM region ---- */
     Port_DetectRomRegion(gRomData, gRomSize);
+    Port_Korean_Detect();
     const RomOffsets* R = gRomOffsets;
 
     if (gRomSize < R->expectedRomSize) {
@@ -1751,6 +1753,13 @@ void Port_LoadRom(const char* path) {
     memcpy(gUnk_08109244, &gRomData[R->text09244], 4);
     memcpy(gUnk_0810926C, &gRomData[R->text0926C], 64);
     memcpy(gUnk_081092D4, &gRomData[R->text092D4], 346);
+    if (Port_IsKoreanPatch()) {
+        /* The patch points sub_0805F9A0 at its own stylized-glyph code list. */
+        u32 krStylized = Port_Kr_StylizedTableOffset();
+        if (krStylized + 346 <= gRomSize) {
+            memcpy(gUnk_081092D4, &gRomData[krStylized], 346);
+        }
+    }
     memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
     memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
@@ -1804,10 +1813,22 @@ void Port_LoadRom(const char* path) {
 #endif
 
     /* gUnk_08109248 — resolved from active ROM */
+    for (int i = 0; i < PORT_GLYPH_BANK_COUNT; i++) {
+        gUnk_08109248[i] = NULL;
+    }
     for (int i = 0; i < 9; i++) {
         gUnk_08109248[i] = Port_UnpackRomDataPtr(&gRomData[R->text09248], i);
     }
-    fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries from active ROM).\n");
+    if (Port_IsKoreanPatch()) {
+        /* Korean patch: 16 glyph banks (Hangul in 4..7 and 9..15) relocated
+         * to a new table referenced from the patched sub_0805F25C literal. */
+        u32 krBanks = Port_Kr_GlyphBankTableOffset();
+        for (int i = 0; i < PORT_GLYPH_BANK_COUNT && krBanks + (u32)(i + 1) * 4 <= gRomSize; i++) {
+            gUnk_08109248[i] = Port_UnpackRomDataPtr(&gRomData[krBanks], i);
+        }
+    }
+    fprintf(stderr, "gUnk_08109248 font tables loaded (%d entries from active ROM).\n",
+            Port_IsKoreanPatch() ? PORT_GLYPH_BANK_COUNT : 9);
 
     /* gUnk_081092AC — resolved from active ROM */
     for (int i = 0; i < 10; i++) {

@@ -35,6 +35,7 @@
 #include "port_runtime_config.h"
 #include "port_save.h"
 #include "port_tts.h"
+#include "port_korean.h"
 #endif
 #include <stdio.h>
 
@@ -1059,6 +1060,21 @@ void sub_0805070C(void) {
             var0->unk6 = 0;
             MemClear(var0->unk8, 0x200);
             name = &gFileSelectState.saves[i].name[0];
+#ifdef PC_PORT
+            if (Port_IsKoreanPatch()) {
+                PortKrNameEnt ent[KR_NAME_BYTES];
+                int n = Port_Kr_DecodeName((const u8*)name, ent);
+                for (j = 0; j < n; j++) {
+                    if (ent[j].code < 0) {
+                        sub_0805F7DC((u8)name[ent[j].pos], var0);
+                    } else {
+                        var0->unk1 = 0;
+                        sub_0805F7DC(Port_Kr_NameCodeToChar(ent[j].code), var0);
+                        var0->unk1 = 1;
+                    }
+                }
+            } else
+#endif
             for (j = 0; j < FILENAME_LENGTH; j++) {
                 sub_0805F7DC(name[j], var0);
             }
@@ -2017,6 +2033,14 @@ void sub_080610B8(void) {
             break;
     }
     tmp3 = gMenu.column_idx;
+#ifdef PC_PORT
+    if (Port_IsKoreanPatch() && uVar7 >= 5 && uVar7 <= 8) {
+        /* Korean patch replaces delete/insert/mark/confirm with its Hangul
+         * name-entry routines; each returns the keyboard page. */
+        tmp3 = Port_Kr_NameEntryAction(uVar7, tmp3);
+        uVar7 = 0;
+    }
+#endif
     switch (uVar7) {
         case 1:
             tmp3 = 0;
@@ -2065,6 +2089,11 @@ void sub_080610B8(void) {
     }
     if (gSaveHeader->language == 0) {
         iVar4 = 3;
+#ifdef PC_PORT
+        if (Port_IsKoreanPatch()) {
+            iVar4 = 4; /* extra Hangul jamo keyboard page */
+        }
+#endif
     } else {
         iVar4 = 2;
     }
@@ -2139,6 +2168,12 @@ void sub_0805144C(void) {
 }
 
 void sub_08051458(void) {
+#ifdef PC_PORT
+    if (Port_IsKoreanPatch()) {
+        Port_Kr_ShowKeyboardPage();
+        return;
+    }
+#endif
     sub_080503A8(gMenu.column_idx + 9);
     MemCopy(&gBG3Buffer[0x80], &gBG1Buffer[0x80], 0x400);
 }
@@ -2463,3 +2498,313 @@ void ResetSaveFile(u32 save_idx) {
     save->stats.health = 24;
     save->stats.maxHealth = 24;
 }
+
+#ifdef PC_PORT
+/* ------------------------------------------------------------------ */
+/*  Korean patch: Hangul name entry (port of the patch's ARM routines) */
+/* ------------------------------------------------------------------ */
+#define KR_KEYBOARD_TILEMAP 0xE53640u /* 0x500 bytes -> gBG3Buffer */
+#define KR_KEYBOARD_TILES 0xE53B40u   /* 0xA00 bytes -> BG VRAM + 0x2000 */
+#define KR_JAMO_BASE_CODE 0x92Eu      /* 19 initial consonants */
+#define KR_VOWEL_BASE_CODE 0x941u     /* 21 vowels */
+
+static u8 sKrJamoPageShown;
+
+void Port_Kr_ShowKeyboardPage(void) {
+    if (gMenu.column_idx == 3) {
+        const u8* map = Port_Kr_RomPtr(KR_KEYBOARD_TILEMAP);
+        const u8* tiles = Port_Kr_RomPtr(KR_KEYBOARD_TILES);
+        if (map != NULL && tiles != NULL) {
+            MemCopy(map, gBG3Buffer, 0x500);
+            gScreen.bg1.updated = 1;
+            gScreen.bg2.updated = 1;
+            port_MemCopyToGBA(tiles, 0x06002000, 0xA00);
+        }
+        sKrJamoPageShown = 1;
+    } else {
+        if (sKrJamoPageShown) {
+            sub_08050790(); /* restore the font tiles the jamo page overwrote */
+            sKrJamoPageShown = 0;
+        }
+        sub_080503A8(gMenu.column_idx + 9);
+    }
+    MemCopy(&gBG3Buffer[0x80], &gBG1Buffer[0x80], 0x400);
+}
+
+static int KrFits(const PortKrNameEnt* ent, int n, u32 bytes, u32 width) {
+    u32 used = 0;
+    if (n > 0) {
+        if (ent[n - 1].pos + ent[n - 1].len + bytes > KR_NAME_BYTES) {
+            return 0;
+        }
+        for (int i = 0; i < n; i++) {
+            used += ent[i].code < 0 ? 8 : 9;
+        }
+    }
+    return used + width < 49;
+}
+
+static int KrAppendCode(const PortKrNameEnt* ent, int n, u32 code) {
+    u8* name = gSave.name;
+    if (!KrFits(ent, n, 2, 9)) {
+        return 0;
+    }
+    if (n == 0) {
+        name[0] = (u8)((code >> 8) + 1);
+        name[1] = (u8)code;
+        name[2] = 0;
+    } else {
+        u32 off = ent[n - 1].pos + ent[n - 1].len;
+        name[off] = (u8)((code >> 8) + 1);
+        name[off + 1] = (u8)code;
+        if (off <= 5) {
+            name[off + 2] = 0;
+        }
+    }
+    return 1;
+}
+
+static void KrStoreCode(u32 pos, u32 code) {
+    gSave.name[pos] = (u8)((code >> 8) + 1);
+    gSave.name[pos + 1] = (u8)code;
+}
+
+void Port_Kr_UpdateNameCursor(void) {
+    PortKrNameEnt ent[KR_NAME_BYTES];
+    int n = Port_Kr_DecodeName(gSave.name, ent);
+    u32 width = 0;
+    if (n < 1) {
+        gGenericMenu.unk10.a[3] = 0;
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        width += ent[i].code < 0 ? 8 : 9;
+    }
+    gGenericMenu.unk10.a[3] = (u8)((width + 4) >> 3);
+}
+
+/* Plain (kana/latin) character, or the dakuten key (c == 0, 0x0E, 0x0F). */
+static int KrInsertPlain(u32 c) {
+    PortKrNameEnt ent[KR_NAME_BYTES];
+    u8* name = gSave.name;
+    int n = Port_Kr_DecodeName(name, ent);
+
+    if (c == 0 || (c & 0xFE) == 0x0E) {
+        u32 pos, old, r;
+        if (n == 0 || ent[n - 1].code >= 0) {
+            return 0;
+        }
+        pos = ent[n - 1].pos;
+        old = gGenericMenu.unk10.a[3];
+        gGenericMenu.unk10.a[3] = (u8)(pos + ent[n - 1].len);
+        r = sub_080514BC(c);
+        gGenericMenu.unk10.a[3] = (u8)old;
+        if (r == 0) {
+            return 0;
+        }
+        if (r != 1) {
+            name[pos] = (u8)r;
+            return 1;
+        }
+    }
+    if (!KrFits(ent, n, 1, 8)) {
+        return 0;
+    }
+    if (n == 0) {
+        name[0] = (u8)c;
+        name[1] = 0;
+    } else {
+        u32 off = ent[n - 1].pos + ent[n - 1].len;
+        name[off] = (u8)c;
+        if (off <= 6) {
+            name[off + 1] = 0;
+        }
+    }
+    return 1;
+}
+
+static int KrFindTriple(const u8* table, int count, u32 a, u32 b) {
+    if (table == NULL) {
+        return -1;
+    }
+    for (int i = 0; i < count; i++) {
+        if (table[i * 3] == a && table[i * 3 + 1] == b) {
+            return table[i * 3 + 2];
+        }
+    }
+    return -1;
+}
+
+/* Grid key on the jamo page: k 0..18 = initial consonant, 19..39 = vowel. */
+static int KrInsertJamo(u32 c) {
+    PortKrNameEnt ent[KR_NAME_BYTES];
+    int n = Port_Kr_DecodeName(gSave.name, ent);
+    u32 k = c - 0x80;
+    PortKrNameEnt* last = n > 0 ? &ent[n - 1] : NULL;
+    u32 l, v, t;
+    s32 idx;
+
+    if (k <= 18) {
+        /* Consonant: becomes (or extends) the final of the last syllable. */
+        if (last != NULL && (u32)last->code < KR_JAMO_BASE_CODE) {
+            s32 newT;
+            Port_Kr_Decompose((u32)last->code, &l, &v, &t);
+            if (t == 0) {
+                newT = (s32)Port_Kr_InitialToFinal(k);
+            } else {
+                newT = KrFindTriple(Port_Kr_DoubleFinalTable(), 11, t, k);
+            }
+            if (newT > 0) {
+                idx = Port_Kr_FindSyllable(l * 588 + v * 28 + (u32)newT);
+                if (idx >= 0) {
+                    KrStoreCode(last->pos, (u32)idx);
+                    return 1;
+                }
+            }
+        }
+    } else if (last != NULL && last->code >= 0) {
+        u32 vk = c - 0x93; /* vowel index 0..20 */
+        u32 code = (u32)last->code;
+        if (code < KR_JAMO_BASE_CODE) {
+            Port_Kr_Decompose(code, &l, &v, &t);
+            if (t == 0) {
+                s32 nv = KrFindTriple(Port_Kr_CompoundVowelTable(), 7, v, vk);
+                if (nv >= 0) {
+                    idx = Port_Kr_FindSyllable(l * 588 + (u32)nv * 28);
+                    if (idx >= 0) {
+                        KrStoreCode(last->pos, (u32)idx);
+                        return 1;
+                    }
+                }
+            } else {
+                /* The final consonant moves to start a new syllable. */
+                u32 split = Port_Kr_FinalSplit(t);
+                s32 keep = Port_Kr_FindSyllable(l * 588 + v * 28 + (split >> 5));
+                s32 next = Port_Kr_FindSyllable(vk * 28 + (split & 31) * 588);
+                if (keep >= 0 && next >= 0 && KrFits(ent, n, 2, 9)) {
+                    KrStoreCode(last->pos, (u32)keep);
+                    return KrAppendCode(ent, n, (u32)next);
+                }
+            }
+        } else if (code < KR_VOWEL_BASE_CODE) {
+            /* Lone initial + vowel -> open syllable. */
+            idx = Port_Kr_FindSyllable((code - KR_JAMO_BASE_CODE) * 588 + vk * 28);
+            if (idx >= 0) {
+                KrStoreCode(last->pos, (u32)idx);
+                return 1;
+            }
+        } else {
+            s32 nv = KrFindTriple(Port_Kr_CompoundVowelTable(), 7, code - KR_VOWEL_BASE_CODE, vk);
+            if (nv >= 0) {
+                KrStoreCode(last->pos, KR_VOWEL_BASE_CODE + (u32)nv);
+                return 1;
+            }
+        }
+    }
+    /* Otherwise append the bare jamo. */
+    return KrAppendCode(ent, n, KR_JAMO_BASE_CODE + k);
+}
+
+static u32 KrBackspace(u32 page) {
+    PortKrNameEnt ent[KR_NAME_BYTES];
+    u8* name = gSave.name;
+    int n;
+    PortKrNameEnt* last;
+    s32 code;
+    s32 result = -1;
+
+    if (!(gInput.newKeys & B_BUTTON)) {
+        /* The fourth bottom-row button now selects the jamo page. */
+        return 3;
+    }
+    n = Port_Kr_DecodeName(name, ent);
+    if (n == 0) {
+        return page;
+    }
+    last = &ent[n - 1];
+    code = last->code;
+    if (code >= 0 && (u32)code < KR_JAMO_BASE_CODE) {
+        /* Peel one jamo off the syllable. */
+        u32 l, v, t;
+        Port_Kr_Decompose((u32)code, &l, &v, &t);
+        if (t != 0) {
+            u32 keepT = ((1u << t) & 0x4FE68u) ? (Port_Kr_FinalSplit(t) >> 5) : 0;
+            result = Port_Kr_FindSyllable(l * 588 + v * 28 + keepT);
+        } else if (v - 9 < 3) {
+            result = Port_Kr_FindSyllable(l * 588 + 8 * 28);
+        } else if (v - 14 < 3) {
+            result = Port_Kr_FindSyllable(l * 588 + 13 * 28);
+        } else if (v == 19) {
+            result = Port_Kr_FindSyllable(l * 588 + 18 * 28);
+        } else {
+            result = (s32)(KR_JAMO_BASE_CODE + l);
+        }
+    } else if (code > (s32)(KR_JAMO_BASE_CODE + 18)) {
+        u32 vv = (u32)code - KR_VOWEL_BASE_CODE;
+        if (vv - 9 < 3) {
+            result = KR_VOWEL_BASE_CODE + 8;
+        } else if (vv - 14 < 3) {
+            result = KR_VOWEL_BASE_CODE + 13;
+        } else if (vv == 19) {
+            result = KR_VOWEL_BASE_CODE + 18;
+        }
+    }
+    if (result >= 0) {
+        KrStoreCode(last->pos, (u32)result);
+    } else {
+        for (u32 i = last->pos; i < KR_NAME_BYTES; i++) {
+            name[i] = 0;
+        }
+    }
+    Port_Kr_UpdateNameCursor();
+    sub_08051574(0x6c);
+    return page;
+}
+
+static u32 KrConfirm(u32 page) {
+    PortKrNameEnt ent[KR_NAME_BYTES];
+    u8* name = gSave.name;
+    int n = Port_Kr_DecodeName(name, ent);
+    u32 end = 0;
+
+    /* Trim trailing raw spaces. */
+    for (int i = n - 1; i >= 0; i--) {
+        if (ent[i].code >= 0 || name[ent[i].pos] != 0x20) {
+            end = ent[i].pos + ent[i].len;
+            break;
+        }
+    }
+    for (u32 i = end; i < KR_NAME_BYTES; i++) {
+        name[i] = 0;
+    }
+    Port_Kr_UpdateNameCursor();
+    sub_08051574(0x6a);
+    SetMenuType(name[0] != 0 ? 2 : 3);
+    return page;
+}
+
+u32 Port_Kr_NameEntryAction(u32 action, u32 page) {
+    switch (action) {
+        case 5:
+            return KrBackspace(page);
+        case 6: {
+            u32 c = (gBG3Buffer[gGenericMenu.unk10.a[0] * 2 + 0xc3 + gGenericMenu.unk10.a[1] * 0x40] >> 1) & 0xff;
+            int ok = (page == 3 && c - 0x80 <= 39) ? KrInsertJamo(c) : KrInsertPlain(c);
+            if (ok) {
+                Port_Kr_UpdateNameCursor();
+                sub_08051574(SFX_6B);
+            }
+            return page;
+        }
+        case 7:
+            if (KrInsertPlain(0)) {
+                Port_Kr_UpdateNameCursor();
+                sub_08051574(SFX_6B);
+            }
+            return page;
+        case 8:
+            return KrConfirm(page);
+    }
+    return page;
+}
+#endif

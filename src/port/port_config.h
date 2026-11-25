@@ -77,6 +77,9 @@ static inline u32 Port_ShouldUseAreaAssetCacheForRegion(RomRegion region) {
 #define PORT_EU_OMITTED_SPRITE_INDEX 288u
 #define PORT_INVALID_SPRITE_INDEX UINT16_MAX
 #define PORT_USA_SPRITE_PTR_COUNT 329u
+
+/* Message-font glyph banks: 9 in retail ROMs, 16 with the Korean patch. */
+#define PORT_GLYPH_BANK_COUNT 16
 #define PORT_EU_SPRITE_PTR_COUNT 328u
 #define PORT_USA_FRAME_OBJ_COUNT 512u
 #define PORT_EU_FRAME_OBJ_COUNT 511u

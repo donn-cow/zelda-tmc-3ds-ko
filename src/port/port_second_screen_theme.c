@@ -1052,7 +1052,10 @@ static void BuildMenuTheme(void) {
         for (i = 0; i < SS_TEXT_STYLE_COUNT; i++) {
             memcpy(sTextLut[i], TextLutPtr(kStyleFill[i], kStyleColor[i]), 32);
         }
-        sFontOk = sFontGlyphs != NULL && !REGION_IS_JP;
+        /* The JP ROM (and the Korean patch built on it) keeps plain ASCII
+         * latin glyphs at their ASCII codes in bank 0, so it can letter the
+         * panel too. */
+        sFontOk = sFontGlyphs != NULL;
     }
 
     /* Stylized banner font (bank 8) + its per-style color tables. The
@@ -1086,7 +1089,14 @@ static void BuildMenuTheme(void) {
             bank1[2];
         sColors[SSC_BANNER_NAVY] = bank1[1];
         sBigFontGlyphs = (const u8*)gUnk_08109248[8];
-        sBigFontOk = sBigFontGlyphs != NULL && !REGION_IS_JP;
+        if (REGION_IS_JP && gRomOffsets != NULL && gRomOffsets->text09248 + 9 * 4 <= gRomSize) {
+            /* JP bank 8 holds A-Z 0-9 and punctuation at their ASCII codes
+             * (lowercase slots are kana; BigGlyphData uppercases). Read the
+             * retail table directly: the Korean patch repoints bank 8 at its
+             * own Hangul face. */
+            sBigFontGlyphs = (const u8*)Port_UnpackRomDataPtr(&gRomData[gRomOffsets->text09248], 8);
+        }
+        sBigFontOk = sBigFontGlyphs != NULL;
     }
 }
 
@@ -2035,6 +2045,9 @@ static const u8* BigGlyphData(char c) {
     u8 code = (u8)c;
     if (code < 0x20) {
         code = '?';
+    }
+    if (REGION_IS_JP && code >= 'a' && code <= 'z') {
+        code = (u8)(code - 'a' + 'A');
     }
     return sBigFontGlyphs + (size_t)code * 128u;
 }

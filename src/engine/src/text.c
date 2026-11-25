@@ -15,6 +15,8 @@ extern void UnpackTextNibbles(void*, u8*);
 #include "port_rom.h"
 #include "port_asset_loader.h"
 #include "port_text_variables.h"
+#include "port_korean.h"
+#include "port_config.h"
 #include <stdio.h>
 #define gUnk_02036AD8 (*(u8*)&gEwram[0x36AD8])
 #define gUnk_02036A58 (*(u8*)&gEwram[0x36A58])
@@ -45,6 +47,13 @@ u32 sub_0805F9A0(u32);
 
 static u32 sub_0805F8F8(u32 idx);
 static u32 sub_0805F7A0(u32 param_1);
+
+/* Banks above this draw two 8px cells per glyph (Korean patch: > 2). */
+#ifdef PC_PORT
+#define KR_WIDE_BANK_MIN (Port_IsKoreanPatch() ? 2u : 4u)
+#else
+#define KR_WIDE_BANK_MIN 4
+#endif
 
 typedef struct {
     u16 unk0;
@@ -353,6 +362,17 @@ u32 GetCharacter(Token* token) {
                 uVar6 = sub_0805EF8C(token);
                 switch (uVar6) {
                     case 0 ... 4:
+#ifdef PC_PORT
+                        if (uVar6 == 0 && Port_IsKoreanPatch()) {
+                            /* Patch hook: the player name is stored in the
+                             * Hangul name encoding and is expanded into text
+                             * control codes before being pushed. */
+                            static u8 sKrPlayerName[32];
+                            Port_Kr_FormatName(gSave.name, sKrPlayerName, sizeof(sKrPlayerName));
+                            sub_0805EF40(token, sKrPlayerName);
+                            break;
+                        }
+#endif
                         ppuVar7 = (u8**)token->_c;
                         if (ppuVar7 == NULL) {
                             ppuVar7 = gTextVariableSources;
@@ -395,18 +415,52 @@ u32 GetCharacter(Token* token) {
                 code |= 0x400;
                 break;
             case 0xc:
+#ifdef PC_PORT
+                if (Port_IsKoreanPatch()) {
+                    /* Korean patch: 0x0B..0x0E select Hangul banks 4..7. */
+                    code = (((code & 7) + 1) << 8) | sub_0805EF8C(token);
+                    break;
+                }
+#endif
                 code = sub_0805EF8C(token);
                 code |= 0x700;
                 break;
             case 0xd:
+#ifdef PC_PORT
+                if (Port_IsKoreanPatch()) {
+                    code = (((code & 7) + 1) << 8) | sub_0805EF8C(token);
+                    break;
+                }
+#endif
                 code = sub_0805EF8C(token);
                 code |= 0x500;
                 break;
             case 0xe:
+#ifdef PC_PORT
+                if (Port_IsKoreanPatch()) {
+                    code = (((code & 7) + 1) << 8) | sub_0805EF8C(token);
+                    break;
+                }
+#endif
                 code = sub_0805EF8C(token);
                 code |= 0x600;
                 break;
             case 0xf:
+#ifdef PC_PORT
+                if (Port_IsKoreanPatch()) {
+                    /* 0x0F nn: nn<0x30 -> bank 2, 0x30..0x3F -> bank 3 (icons),
+                     * 0x4X mm -> Hangul bank 9+X. */
+                    code = sub_0805EF8C(token);
+                    if (code <= 0x2f) {
+                        code |= 0x200;
+                    } else if (code <= 0x3f) {
+                        code = (code & 0xf) | 0x300;
+                    } else {
+                        code = (((code & 0xf) + 9) << 8) | sub_0805EF8C(token);
+                    }
+                    break;
+                }
+#endif
                 code = sub_0805EF8C(token);
                 code |= 0x300;
                 break;
@@ -467,6 +521,15 @@ u32* sub_0805F25C(u32 param_1) {
             param_1 = param_1 << 1;
             break;
     }
+#ifdef PC_PORT
+    if (Port_IsKoreanPatch() && uVar1 >= 3) {
+        /* Korean patch: bank 2 single-width, banks 3..15 two cells per glyph
+         * (the JP switch above already doubled 5..8). */
+        if (uVar1 == 3 || uVar1 == 4 || uVar1 >= 9) {
+            param_1 = param_1 << 1;
+        }
+    }
+#endif
     {
 #ifdef PC_PORT
         /* Bank nibble comes from the text stream (ROM/asset/mod data); the
@@ -474,7 +537,7 @@ u32* sub_0805F25C(u32 param_1) {
          * entries. GBA read adjacent ROM for 9..15; on PC that's a garbage
          * host pointer — clamp to bank 0. */
         u32* result;
-        if (uVar1 >= 9) {
+        if (uVar1 >= (Port_IsKoreanPatch() ? PORT_GLYPH_BANK_COUNT : 9) || gUnk_08109248[uVar1] == NULL) {
             uVar1 = 0;
         }
         result = gUnk_08109248[uVar1] + param_1 * 0x10;
@@ -551,7 +614,7 @@ u32 GetFontStrWith(Token* param_1, u32 param_2) {
                 default:
                     if (uVar5 == 0) {
                         puVar2 = (u32*)sub_0805F25C(character);
-                        if (4 < character >> 8) {
+                        if (KR_WIDE_BANK_MIN < character >> 8) {
                             uVar3 = sub_0805F7A0(puVar2[0x10]);
                             uVar4 += (uVar3 >> 8);
                         }
@@ -838,7 +901,7 @@ u32 sub_0805F7DC(u32 r0, WStruct* r1) {
 
     offset = sub_0805F25C(r0);
     temp = r1->unk6;
-    if ((r0 >> 8) > 4) {
+    if ((r0 >> 8) > KR_WIDE_BANK_MIN) {
         sub_0805F820(r1, offset);
         offset += 0x10;
     }

@@ -42,7 +42,8 @@ static int RomIsSupported(const char* path) {
     if (!file)
         return 0;
     int ok = fseek(file, 0xAC, SEEK_SET) == 0 && fread(gameCode, 1, sizeof(gameCode), file) == sizeof(gameCode) &&
-             (memcmp(gameCode, "BZME", sizeof(gameCode)) == 0 || memcmp(gameCode, "BZMP", sizeof(gameCode)) == 0);
+             (memcmp(gameCode, "BZME", sizeof(gameCode)) == 0 || memcmp(gameCode, "BZMP", sizeof(gameCode)) == 0 ||
+              memcmp(gameCode, "BZMJ", sizeof(gameCode)) == 0);
     fclose(file);
     return ok;
 }

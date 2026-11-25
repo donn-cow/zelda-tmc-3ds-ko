@@ -4,6 +4,9 @@
  *
  * @brief Figurine Device object
  */
+#ifdef PC_PORT
+#include "port_korean.h"
+#endif
 #include "figurineMenu.h"
 #include "asm.h"
 #include "color.h"
@@ -862,6 +865,17 @@ void FigurineDevice_GetChanceBasedOffFigurineCount(FigurineDeviceEntity* this) {
      * ~112 figurines were collected); it instead remaps the base 1-shell
      * curve in sub_0808826C, so this routine stays byte-identical to the
      * original game on every build. */
+#ifdef PC_PORT
+    if (Port_IsKoreanPatch()) {
+        /* The Korean patch compares the chance unsigned and leaves 0 alone. */
+        u32 floor = gSave.stats.figurineCount < 50 ? 15 : gSave.stats.figurineCount < 80 ? 12
+                                                  : gSave.stats.figurineCount < 110 ? 9 : 6;
+        if ((u8)this->chance != 0 && (u8)this->chance < floor) {
+            this->chance = floor;
+        }
+        return;
+    }
+#endif
     if (gSave.stats.figurineCount < 50) {
         if (this->chance < 15) {
             this->chance = 15;

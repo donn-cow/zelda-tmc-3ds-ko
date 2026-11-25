@@ -69,7 +69,7 @@ u8 gUnk_080C9044[8] = { 0 };
 /* Font/text data â€” loaded from ROM by Port_LoadRom */
 void* gTextVariableSources[5];
 u8 gUnk_08109244[4] __attribute__((aligned(4)));
-void* gUnk_08109248[9];
+void* gUnk_08109248[16]; /* PORT_GLYPH_BANK_COUNT (Korean patch uses 16) */
 u8 gUnk_0810926C[64] __attribute__((aligned(4)));
 void* gUnk_081092AC[10];
 u8 gUnk_081092D4[346] __attribute__((aligned(4)));

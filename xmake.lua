@@ -460,6 +460,7 @@ target("region_data_resolver_test")
     add_defines("PC_PORT", "MULTI_REGION", "USA", "ENGLISH")
     add_files("tools/tests/port/port_region_data_test.c")
     add_files("src/port/port_region_data.c")
+    add_files("src/port/port_korean.c")
 target_end()
 
 

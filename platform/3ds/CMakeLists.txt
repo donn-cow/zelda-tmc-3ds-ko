@@ -53,6 +53,7 @@ set(TMC_PORT_SOURCES
     src/port/port_bios.c src/port/port_debug_verbose.c src/port/port_inline_ptrs.c
     src/port/port_script_addrs.c src/port/port_offset_remap.c src/port/port_rom.c
     src/port/port_region_data.c
+    src/port/port_korean.c
     src/port/port_bottle_compat.c
     src/port/port_bomb_compat.c
     src/port/port_cloud_tops_fight.c
@@ -77,13 +78,21 @@ list(TRANSFORM TMC_PORT_SOURCES PREPEND "${TMC_ROOT}/")
 ctr_add_shader_library(ppu_gpu_3ds_shader source/ppu_gpu_3ds.v.pica)
 dkp_add_embedded_binary_library(ppu_gpu_3ds_shader_bin ppu_gpu_3ds_shader)
 
+option(TMC3DS_UPDATER "Build the online updater (needs curl/jansson/mbedtls)" ON)
+if(TMC3DS_UPDATER)
+    set(TMC_UPDATER_SOURCES source/updater.c source/update_manifest.c)
+    set(TMC_UPDATER_LIBS curl jansson mbedtls mbedx509 mbedcrypto)
+else()
+    set(TMC_UPDATER_SOURCES source/updater_disabled.c)
+    set(TMC_UPDATER_LIBS)
+endif()
+
 add_executable(tmc-3ds
     ${TMC_ENGINE_SOURCES}
     ${TMC_ACTOR_SOURCES}
     ${TMC_PORT_SOURCES}
     ${AGBPLAY_SOURCES}
-    source/updater.c
-    source/update_manifest.c
+    ${TMC_UPDATER_SOURCES}
     source/main_3ds.c
     source/arm11_fast_mem.c
     source/ndsp_pcm_offload.c
@@ -166,9 +175,9 @@ target_link_directories(tmc-3ds PRIVATE "${UPDATE_DEPS_ROOT}/lib")
 find_library(TMC_UPDATE_ZLIB NAMES z PATHS "${UPDATE_DEPS_ROOT}/lib"
     "$ENV{DEVKITPRO}/portlibs/3ds/lib" NO_DEFAULT_PATH)
 if(TMC_UPDATE_ZLIB)
-    target_link_libraries(tmc-3ds PRIVATE citro2d citro3d curl jansson mbedtls mbedx509 mbedcrypto "${TMC_UPDATE_ZLIB}" ctru m ppu_gpu_3ds_shader_bin)
+    target_link_libraries(tmc-3ds PRIVATE citro2d citro3d ${TMC_UPDATER_LIBS} "${TMC_UPDATE_ZLIB}" ctru m ppu_gpu_3ds_shader_bin)
 else()
-    target_link_libraries(tmc-3ds PRIVATE citro2d citro3d curl jansson mbedtls mbedx509 mbedcrypto ctru m ppu_gpu_3ds_shader_bin)
+    target_link_libraries(tmc-3ds PRIVATE citro2d citro3d ${TMC_UPDATER_LIBS} ctru m ppu_gpu_3ds_shader_bin)
 endif()
 
 set(TMC_ROMFS "${CMAKE_CURRENT_BINARY_DIR}/romfs")

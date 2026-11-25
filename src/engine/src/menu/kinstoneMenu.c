@@ -5,6 +5,9 @@
  * @brief Kinstone Menu Subtask
  */
 #include "area.h"
+#ifdef PC_PORT
+#include "port_korean.h"
+#endif
 #include "common.h"
 #include "enemy.h"
 #include "sound.h"
@@ -692,7 +695,14 @@ u32 KinstoneMenu_080A4494(void) {
         psVar1->charColor = 0;
         psVar1->bgColor = 5;
         psVar1->unk1 = 0;
-        sub_080A44E0(psVar1, gSave.name, 0x80);
+#ifdef PC_PORT
+        if (Port_IsKoreanPatch()) {
+            static u8 sKrFuseName[32];
+            Port_Kr_FormatName(gSave.name, sKrFuseName, sizeof(sKrFuseName));
+            sub_080A44E0(psVar1, sKrFuseName, 0x80);
+        } else
+#endif
+            sub_080A44E0(psVar1, gSave.name, 0x80);
         multiVal = GetFuserIdAndFuserTextId(gFuseInfo.entity);
         fuserTextId = (u8*)multiVal.HALF_U.HI;
         ret = sub_080A44E0(psVar1, fuserTextId, 0xa0);
